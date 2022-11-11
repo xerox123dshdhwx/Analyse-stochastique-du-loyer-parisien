@@ -8,11 +8,34 @@ import json
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
+import random
 
 listCoefDirecteur = []
 listCoefDirecteurWithKey = []
 coefKeyfiltred = []
 max = [-1, 0]
+
+def auto_cov(data, n):
+    mean = sum(data)/len(data)
+    autocov = []
+    for h in range(len(data)):
+        sigma = []
+        for t in range(1, n - h):
+            sigma.append((data[t+h] - mean) * (data[t] - mean))
+        autocov.append((1/n) * sum(sigma))
+    return autocov
+
+def estim_ar2(auto_cor):
+    elt = np.array([[auto_cor[0], auto_cor[1]], [auto_cor[1], auto_cor[0]]])
+    r = -np.array([auto_cor[1], auto_cor[2]])
+    return np.dot(np.linalg.inv(elt), r)
+
+def predict(data, coeff):
+    predict_sig = [0 for i in range(len(data))]
+    for k in range(1, len(data)-3):
+        predict_sig[k + 1] = random.gauss(0, 1) - coeff[0] * predict_sig[k] - coeff[1] * predict_sig[k - 1]
+    return predict_sig
+
 
 def priceParisHousing(fileName: str) -> dict:
     """
@@ -65,19 +88,31 @@ def averagePriceQuarter(priceDistrictYear: dict) -> None:
 
 def creatingCourbs(dict: dict, moyenneMobile: dict):
     """
-    Displays the average price of a neighbourhood over the last 4 years
+    Displays the average price of a neighbourhood over the last 4 years with the average mobile and the estimation with  autoregressive model
     :param dict:
     :return: Display with matplotlib
     """
 
     x_point, y_point = np.array([2019, 2020, 2021, 2022]), []
-    for k in range(50, len(key)):#We plot only the 30 last courbs 
+    for k in tqdm(range(50, len(key))):#We plot only the 30 last courbs
         for years in dict:
             y_point.append(dict[years][key[k]])
+        x, signal = np.linspace(2019, 2022, 4), np.array(y_point)
+        auto_cov_sig = auto_cov(signal, len(signal))
+        auto_cor_sig = [auto_cov_sig[k] / auto_cov_sig[0] for k in range(len(auto_cov_sig))]
+
+        coeff = estim_ar2(auto_cor_sig)
+        predict_sig = predict(signal, coeff)
+
+        # plt.plot(x, signal, label='Ref. Signal')
+        plt.subplot(1, 2, 2)
+        plt.plot(x, predict_sig, label='Predict Signals')
+        plt.legend(loc=1)
+        plt.subplot(1, 2, 1)
         plt.plot(x_point, np.array(y_point), marker='D')
-        plt.ylabel(f'District {key[k]}')
-        plt.xlabel("Years")
         plt.plot(np.array([2020, 2021]), np.array(moyenneMobile[str(key[k])]), color='r', marker='D')
+        plt.ylabel(f'{key[k]}')
+        plt.xlabel("Years")
         plt.show()
         y_point = []
 
@@ -175,24 +210,3 @@ def best5HousingToInvest(avgPriceParisHousing):
     print(f'Voici les 5 quartier les plus prometteur de paris !')
     print(
         f'https://opendata.paris.fr/explore/dataset/logement-encadrement-des-loyers/map/?disjunctive.annee&disjunctive.id_zone&disjunctive.nom_quartier&disjunctive.piece&disjunctive.epoque&disjunctive.meuble_txt&sort=nom_quartier{path}&location=12,48.85331,2.30387&basemap=jawg.streets')
-
-
-
-def Analyse():
-    # We get from the file all the differente price for each district and for each year and store it in a dict
-    avgPriceParisHousing = priceParisHousing("logement-encadrement-des-loyers.json")
-
-    # We get the dict and make the average price for each quarter and for each year
-    averagePriceQuarter(avgPriceParisHousing)
-
-    avgMobile = mobileAvg(avgPriceParisHousing)
-    # We create a courb that render the 4 avg price of the district for the 4 past years (2019-2020-2021-2022)
-    creatingCourbs(avgPriceParisHousing, avgMobile)
-
-    plt.hist(bestHosingToInvest(avgMobile)[0])
-    plt.show()
-
-    best5HousingToInvest(avgPriceParisHousing)
-    creatingCourbsFilter(avgPriceParisHousing, avgMobile, coefKeyfiltred)
-
-Analyse()
